@@ -1,0 +1,14 @@
+{
+  "name": "cadet-member",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cadet Member: Telegram Mini App on Telegram Serverless",
+  "scripts": {
+    "deploy": "tgcloud push",
+    "migrate": "tgcloud migrate",
+    "status": "tgcloud status"
+  },
+  "devDependencies": {
+    "@tgcloud/cli": "latest"
+  }
+}
