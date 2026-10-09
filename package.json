@@ -1,0 +1,14 @@
+{
+  "name": "telegram-server-less",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "tgcloud push",
+    "status": "tgcloud status",
+    "test": "node test/pure-libs.test.mjs"
+  },
+  "devDependencies": {
+    "@tgcloud/cli": "latest"
+  }
+}

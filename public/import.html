@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CADET data import</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:16px;background:#EAF4FF;color:#1B3A63}
+    .card{background:#fff;border-radius:16px;padding:16px;margin-bottom:14px}
+    button{background:#2166D6;color:#fff;border:0;border-radius:10px;padding:10px 16px;font-weight:700;font-size:15px}
+    button[disabled]{opacity:.5}
+    pre{background:#0f1e37;color:#cfe3ff;border-radius:10px;padding:10px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow:auto}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>One-time data import</h2>
+    <p>Choose the two files created by <code>migration/export-sqlserver.mjs</code>. Open this page from the Mini App
+       while signed in as admin (or as an id listed in <code>BOOTSTRAP_ADMIN_TG_IDS</code>), then
+       <b>delete this page and <code>endpoints/adminImport.js</code></b> when you are done.</p>
+    <p><label>users.json <input type="file" id="fUsers" accept=".json"></label></p>
+    <p><label>members.json <input type="file" id="fMembers" accept=".json"></label></p>
+    <button id="go">Import</button>
+  </div>
+  <pre id="log">Waiting...</pre>
+  <script>
+    var tg = window.Telegram && window.Telegram.WebApp;
+    var logEl = document.getElementById('log');
+    function log(m) { logEl.textContent += '\n' + m; logEl.scrollTop = logEl.scrollHeight; }
+    function call(rows, table) {
+      return new Promise(function (resolve, reject) {
+        tg.Serverless.call('adminImport', { table: table, rows: rows }, function (e, r) { e ? reject(e) : resolve(r); });
+      });
+    }
+    function readJson(input) {
+      return new Promise(function (resolve, reject) {
+        var f = input.files && input.files[0];
+        if (!f) return resolve(null);
+        var fr = new FileReader();
+        fr.onload = function () { try { resolve(JSON.parse(fr.result)); } catch (e) { reject(e); } };
+        fr.onerror = reject; fr.readAsText(f);
+      });
+    }
+    // send rows in batches of ~600 KB (and at most 100 rows); on failure retry row by row
+    async function upload(rows, table) {
+      var done = 0, i = 0;
+      while (i < rows.length) {
+        var batch = [], size = 0;
+        while (i < rows.length && batch.length < 100 && (batch.length === 0 || size + JSON.stringify(rows[i]).length < 600000)) {
+          size += JSON.stringify(rows[i]).length; batch.push(rows[i++]);
+        }
+        try { done += (await call(batch, table)).imported; }
+        catch (e) {
+          if (batch.length === 1) { log('  FAILED id ' + batch[0].id + ': ' + (e.message || e.type)); continue; }
+          for (var j = 0; j < batch.length; j++) {
+            try { done += (await call([batch[j]], table)).imported; } catch (e2) { log('  FAILED id ' + batch[j].id + ': ' + (e2.message || e2.type)); }
+          }
+        }
+        log(table + ': ' + done + ' / ' + rows.length);
+      }
+      return done;
+    }
+    document.getElementById('go').onclick = async function () {
+      var btn = this; btn.disabled = true;
+      try {
+        if (!tg || !tg.initData) throw new Error('Open this page inside Telegram.');
+        var users = await readJson(document.getElementById('fUsers'));
+        var members = await readJson(document.getElementById('fMembers'));
+        if (users) log('Imported users: ' + await upload(users, 'users'));
+        if (members) log('Imported members: ' + await upload(members, 'members'));
+        log('Done.');
+      } catch (e) { log('ERROR: ' + (e.message || e)); }
+      btn.disabled = false;
+    };
+  </script>
+</body>
+</html>
